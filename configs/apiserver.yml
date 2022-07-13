@@ -1,1 +1,2 @@
-bin_addr: ":8080"
+host: "localhost"
+port: "8082"

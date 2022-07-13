@@ -1,11 +1,10 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"github.com/dantedenis/reast-api-golang/internal/app/apiserver"
-	"gopkg.in/yaml.v3"
 	"log"
-	"os"
 )
 
 var (
@@ -13,32 +12,18 @@ var (
 )
 
 func init() {
-	flag.StringVar(&configPath, "config-path", "configs/apiserver.yml", "path to config api server file")
+	flag.StringVar(&configPath, "config-path", "configs/apiserver.json", "path to config api server file")
 }
 
 func main() {
 	flag.Parse()
-
-	config := apiserver.NewConfig()
-	file, err := os.Open(configPath)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	defer func(file *os.File) {
-		err := file.Close()
-		if err != nil {
-			log.Fatalln(err)
-		}
-	}(file)
-
-	err = yaml.NewDecoder(file).Decode(&config)
+	config, err := apiserver.NewConfigBuilder().Parse(configPath)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	s := apiserver.NewAPIServer(config)
-	if err := s.Start(); err != nil {
+	if err := s.Start(context.Background()); err != nil {
 		log.Fatalln(err)
 	}
-
 }

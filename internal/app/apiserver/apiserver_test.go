@@ -16,4 +16,5 @@ func TestAPIServer_Start(t *testing.T) {
 	s.handlePost().ServeHTTP(rec, req)
 
 	assert.Equal(t, rec.Body.String(), "Hello")
+
 }

@@ -62,7 +62,7 @@ func (c *ConfigBuilder) Parse(configPath string) (IBuild, error) {
 
 //----------------------------------------------------------------------------//
 
-// JSON configure
+// ConfigJSON JSON configure
 type ConfigJSON struct {
 	ConfigBuilder
 }
@@ -87,7 +87,7 @@ func (c *ConfigJSON) Build() *config {
 
 //----------------------------------------------------------------------------//
 
-// XML Configure
+// ConfigXML XML Configure
 type ConfigXML struct {
 	ConfigBuilder
 }
@@ -114,7 +114,7 @@ func (c *ConfigXML) Build() *config {
 
 //----------------------------------------------------------------------------//
 
-// YMAL configure
+// ConfigYML YML configure
 type ConfigYML struct {
 	ConfigBuilder
 }

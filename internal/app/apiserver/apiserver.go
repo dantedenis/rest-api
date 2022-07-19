@@ -2,28 +2,36 @@ package apiserver
 
 import (
 	"context"
+	"errors"
+	conPkg "github.com/dantedenis/reast-api-golang/internal/app/config"
 	"github.com/dantedenis/reast-api-golang/internal/app/logger"
-	"io"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
+	"sync/atomic"
 	"syscall"
+	_ "time"
+)
+
+const (
+	RateLimiter = 100
 )
 
 type APIServer struct {
 	server    http.Server
-	configure *config
-	logger    *logger.Logger
-	limiter   chan struct{}
+	configure *conPkg.Config
+	logger    logger.Logg
+	limiter   int32
+	mux       sync.Mutex
 }
 
-func NewAPIServer(configure IBuild) *APIServer {
+func NewAPIServer(configure conPkg.IBuild) *APIServer {
 	con := configure.Build()
 
 	api := &APIServer{
 		configure: con,
 		logger:    logger.NewLogger(os.Stdout, os.Stderr),
-		limiter:   make(chan struct{}, 100),
 	}
 	api.server.Addr = con.GetAddr()
 
@@ -33,59 +41,80 @@ func NewAPIServer(configure IBuild) *APIServer {
 func (a *APIServer) Start(ctx context.Context) (err error) {
 	a.configureRouter()
 
+	// Gorutine for
 	connClosed := make(chan struct{})
+	defer close(connClosed)
 	go func() {
 		sigint := make(chan os.Signal, 1)
+		defer close(sigint)
 		signal.Notify(sigint, os.Interrupt, syscall.SIGINT)
 
-		a.logger.InfoMsg.Printf("Server is shutting down to: %+v\n", <-sigint)
+		a.logger.PrintfInfo("Server is shutting down to: %+v\n", <-sigint)
+		a.mux.Lock()
+		defer a.mux.Unlock()
 		if err = a.server.Shutdown(ctx); err != nil {
-			a.logger.ErrorMsg.Println("Failed stop server, err:", err)
+			a.logger.PrintError("Failed stop server, err:", err.Error())
 		}
-		close(connClosed)
+		connClosed <- struct{}{}
 	}()
 
+	// Run server
 	go func() {
 		if err = a.server.ListenAndServe(); err != http.ErrServerClosed {
-			a.logger.ErrorMsg.Println("Failed start server")
+			a.logger.PrintError("Failed start server")
 		}
 	}()
 
-	a.logger.InfoMsg.Println("Server start to:", "http://"+a.server.Addr)
+	a.logger.PrintfInfo("Server start to:", "http://"+a.server.Addr)
 
 	<-connClosed
-
-	a.logger.InfoMsg.Println("Server stop is successful")
+	a.logger.PrintfInfo("Server stop is successful")
 	return
 }
 
 func (a *APIServer) configureRouter() {
 	router := http.NewServeMux()
 
-	router.HandleFunc("/", a.middleware(a.handlePost()))
+	router.HandleFunc("/run", a.middleware(a.handler()))
 
 	a.server.Handler = router
 }
 
-func (a *APIServer) handlePost() http.HandlerFunc {
+func (a *APIServer) handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
+		if r.Method != http.MethodPost {
+			a.clientError(w, http.StatusBadRequest, errors.New("invalid method"))
+			return
+		}
+
+		if r.URL.Path != "/run" {
 			a.notFound(w)
 			return
 		}
-		_, err := io.WriteString(w, "Hello")
-		if err != nil {
-			a.logger.ErrorMsg.Println("Error writer:", err)
+
+		if !a.AddQueue() {
+			a.clientError(w, http.StatusTooManyRequests, errors.New("too many requestes"))
+			return
 		}
+		defer a.DoneQueue()
+
+		err := a.runner(w, r)
+		if err != nil {
+			a.clientError(w, http.StatusBadRequest, err)
+			return
+		}
+
 	}
 }
 
-func (a *APIServer) AddChan(dec int) {
-	for i := 0; i < dec; i++ {
-		a.limiter <- struct{}{}
+func (a *APIServer) AddQueue() bool {
+	if atomic.LoadInt32(&a.limiter) < RateLimiter {
+		atomic.AddInt32(&a.limiter, 1)
+		return true
 	}
+	return false
 }
 
-func (a *APIServer) DoneChan() {
-	<-a.limiter
+func (a *APIServer) DoneQueue() {
+	atomic.AddInt32(&a.limiter, -1)
 }

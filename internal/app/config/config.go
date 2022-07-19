@@ -4,25 +4,24 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
-	"gopkg.in/yaml.v3"
 	"io/ioutil"
 	"strings"
 )
 
 type IBuild interface {
-	Build() *config
+	Build() *Config
 }
 
-type config struct {
+type Config struct {
 	host, port string
 }
 
-func (c *config) GetAddr() string {
+func (c *Config) GetAddr() string {
 	return c.host + ":" + c.port
 }
 
 type ConfigBuilder struct {
-	config *config
+	config *Config
 }
 
 func (c *ConfigBuilder) setHostPort(host, port string) error {
@@ -36,7 +35,7 @@ func (c *ConfigBuilder) setHostPort(host, port string) error {
 
 func NewConfigBuilder() *ConfigBuilder {
 	return &ConfigBuilder{
-		config: &config{},
+		config: &Config{},
 	}
 }
 
@@ -82,7 +81,7 @@ func (c *ConfigBuilder) fromJSON(b []byte) (IBuild, error) {
 	return &ConfigJSON{*c}, err
 }
 
-func (c *ConfigJSON) Build() *config {
+func (c *ConfigJSON) Build() *Config {
 	return c.config
 }
 
@@ -109,7 +108,7 @@ func (c *ConfigBuilder) fromXML(b []byte) (IBuild, error) {
 	return &ConfigXML{*c}, err
 }
 
-func (c *ConfigXML) Build() *config {
+func (c *ConfigXML) Build() *Config {
 	return c.config
 }
 
@@ -121,20 +120,5 @@ type ConfigYML struct {
 }
 
 func (c *ConfigBuilder) fromYML(b []byte) (IBuild, error) {
-	temp := struct {
-		Host string `yaml:"host"`
-		Port string `yaml:"port"`
-	}{}
-
-	err := yaml.Unmarshal(b, &temp)
-	if err != nil {
-		return nil, err
-	}
-
-	err = c.setHostPort(temp.Host, temp.Port)
-	return &ConfigYML{*c}, err
-}
-
-func (c *ConfigYML) Build() *config {
-	return c.config
+	return nil, nil
 }

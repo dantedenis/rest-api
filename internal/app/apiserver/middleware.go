@@ -5,9 +5,9 @@ import (
 )
 
 func (a *APIServer) middleware(h http.HandlerFunc) http.HandlerFunc {
-	a.AddChan(1)
+
 	return func(w http.ResponseWriter, r *http.Request) {
+		a.logger.PrintfInfo("Request Method: %s, URL: %s", r.Method, r.URL)
 		h(w, r)
-		a.DoneChan()
 	}
 }
